@@ -21,7 +21,7 @@ stages:
 
     steps:
     - task: UseDotNet@2
-      displayName: 'Use .NET Core SDK $(dotnetSdkVersion)'
+      displayName: 'Use .NET SDK $(dotnetSdkVersion)'
       inputs:
         version: '$(dotnetSdkVersion)'
 
@@ -94,6 +94,30 @@ stages:
         artifactName: dropDacpac
       condition: succeededOrFailed()
 
+- stage: 'Provision'
+  displayName: 'Provision the database and web application'
+  jobs: 
+  - job: 'DeployInfrastructure'
+    displayName: 'Deploy infrastructure job'
+    pool:
+      vmImage: 'ubuntu-18.04'
+    variables:
+    - group: 'Release'
+    steps:
+    - task: AzureResourceManagerTemplateDeployment@3  # task pour le deploiement des ressources de la template.
+      inputs:
+        deploymentScope: 'Resource Group'
+        ConnectedServiceName: 'Abonnement Azure 1'  # AzureSubscription
+        subscriptionName: '$(subscription)'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: 'tailspin-spacegame-web-rg'
+        location: '$(location)'
+        templateLocation: 'Linked artifact'
+        csmFile: 'template.json'
+        csmParametersFile: 'deploymentParameters.json'
+        deploymentMode: 'Incremental'
+        deploymentOutputs: ResourceGroupDeploymentOutputs
+
 - stage: DBAVerificationScript
   displayName: 'Script database schema changes'
   dependsOn: Provision
@@ -108,13 +132,18 @@ stages:
       runOnce:
         deploy:
           steps: 
+          - task: AzureKeyVault@1 # task qui recupere les secrets de vault et les ajoute aux variables du job.
+            inputs:
+              azureSubscription: 'Abonnement Azure 1'
+              keyVaultName: '$(keyVaultName)'
+              secretsFilter: '*'
           - download: current
             artifact: dropDacpac
             patterns: '**/*'
-          - task: SqlAzureDacpacDeployment@1
+          - task: SqlAzureDacpacDeployment@1  # task de deploiement de la BDD.
             displayName: Generate schema change script
             inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              azureSubscription: 'Abonnement Azure 1'
               authenticationType: 'server'
               serverName: 'tailspin-space-game-sql-dev-$(uniqueSuffix).database.windows.net'
               databaseName: 'tailspindatabase'
@@ -168,25 +197,32 @@ stages:
 - stage: DBAVerificationApply
   displayName: 'Apply database schema changes'
   dependsOn: DBAVerificationScript
-  variables: 
-  - group: 'Release'
   condition: and(succeeded('DBAVerificationScript'), eq(variables['schemaChanged'], True))
+  variables:
+  - group: 'Release'
   jobs:
   - deployment: DBAVerificationApply
     pool:
       vmImage: 'windows-2019'
+    variables:
+    - group: 'Release'
     environment: 'dbaverificationapply'
     strategy:
       runOnce:
         deploy:
           steps:
+          - task: AzureKeyVault@1 # task qui recupere les secrets de vault et les ajoute aux variables du job.
+            inputs:
+              azureSubscription: 'Abonnement Azure 1'
+              keyVaultName: '$(keyVaultName)'
+              secretsFilter: '*'
           - download: current
             artifact: dropDacpac
             patterns: '**/*'
           - task: SqlAzureDacpacDeployment@1
             displayName: 'Deploy SQL schema'
             inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              azureSubscription: 'Abonnement Azure 1'
               authenticationType: 'server'
               serverName: 'tailspin-space-game-sql-dev-$(uniqueSuffix).database.windows.net'
               databaseName: 'tailspindatabase'
@@ -241,11 +277,23 @@ stages:
       runOnce:
         deploy:
           steps:
+          - task: AzureKeyVault@1 # task qui recupere les secrets de vault et les ajoute aux variables du job.
+            inputs:
+              azureSubscription: 'Abonnement Azure 1'
+              keyVaultName: '$(keyVaultName)'
+              secretsFilter: '*'
           - download: current
             artifact: drop
           - task: AzureWebApp@1
             displayName: 'Azure App Service Deploy: website'
             inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              azureSubscription: 'Abonnement Azure 1'
               appName: 'tailspin-space-game-web-dev-$(uniqueSuffix)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+          - task: AzureAppServiceSettings@1
+            displayName: Azure App Service Settings
+            inputs:
+              azureSubscription: 'Abonnement Azure 1'
+              appName: 'tailspin-space-game-web-dev-$(uniqueSuffix)'
+              connectionStrings: |
+                [{ "name": "DefaultConnection","value": "$(connectionString)","type": "SQLAzure","slotSetting": false }]
