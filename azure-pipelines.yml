@@ -298,5 +298,5 @@ stages:
               connectionStrings: |
                 [{ "name": "DefaultConnection","value": "$(connectionString)","type": "SQLAzure","slotSetting": false }]
 
-
                 
+
