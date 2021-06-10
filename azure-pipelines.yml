@@ -69,7 +69,46 @@ stages:
   displayName: 'Deploy to the dev environment'
   dependsOn: Build
   jobs:
+  - job: Provision
+    displayName: 'Provision Azure App Service'
+    pool:
+      vmImage: 'ubuntu-18.04'
+    variables:
+    - group: Release
+    steps:
+    - script: |   # cette task utilise l'envirnnement CloudShell pour l'execution des taches ci-dessous.
+        # Exit when any command returns a failure status.
+        set -e
+
+        # Write terraform.tfvars.
+        echo 'resource_group_location = "'$(ResourceGroupLocation)'"' | tee terraform.tfvars
+        # Write backend.tfvars.
+        echo 'resource_group_name = "tf-storage-rg"' | tee backend.tfvars
+        echo 'storage_account_name = "'$(StorageAccountName)'"' | tee -a backend.tfvars
+        echo 'container_name = "tfstate"' | tee -a backend.tfvars
+        echo 'key = "terraform.tfstate"' | tee -a backend.tfvars
+
+        # Initialize Terraform.
+        terraform init -input=false -backend-config="backend.tfvars"
+        # Apply the Terraform plan.
+        terraform apply -input=false -auto-approve
+
+        # Get the App Service name for the dev environment.
+        WebAppNameDev=$(terraform output appservice_name_dev)
+
+        # Write the WebAppNameDev variable to the pipeline.
+        echo "##vso[task.setvariable variable=WebAppNameDev;isOutput=true]$WebAppNameDev"
+      name: 'RunTerraform'
+      displayName: 'Run Terraform'
+      env:  # defini les variables d'environnement (export) du shell. Chaque variable du pipeline est mappé à un nom de variable dans l'env shell.
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
   - deployment: Deploy
+    dependsOn: Provision
+    variables:
+      WebAppNameDev: $[ dependencies.Provision.outputs['RunTerraform.WebAppNameDev'] ]
     pool:
       vmImage: 'ubuntu-18.04'
     environment: dev
@@ -85,3 +124,11 @@ stages:
               azureSubscription: 'Resource Manager - Tailspin - Space Game'
               appName: '$(WebAppNameDev)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+
+# notes:
+  # la tache script crée simplement un environnement shell dans lequel elle execute le plan terraform ./main.tf
+  # étapes de provisionnement de l'infrastructure avec terraform dans un pipeline Azure:
+    # 1. le script ajoute les variables du bloc backend dans le fichiers backend.tfvars pour stocker le fichier d'etat dans
+        # le blob storage spécifié. Si cette configuration n'est pas spécifiée, le fichier d'etat sera perdu au prochain pool
+        # qui excecutera le plan terraform.
+    # 2. il configure un principal de service pour que terraform puisse acceder à Azure. 
