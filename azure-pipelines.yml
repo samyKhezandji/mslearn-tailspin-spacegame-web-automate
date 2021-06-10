@@ -134,7 +134,7 @@ stages:
           steps: 
           - task: AzureKeyVault@1 # task qui recupere les secrets de vault et les ajoute aux variables du job.
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               keyVaultName: '$(keyVaultName)'
               secretsFilter: '*'
           - download: current
@@ -143,7 +143,7 @@ stages:
           - task: SqlAzureDacpacDeployment@1  # task de deploiement de la BDD.
             displayName: Generate schema change script
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               authenticationType: 'server'
               serverName: 'tailspin-space-game-sql-dev-$(uniqueSuffix).database.windows.net'
               databaseName: 'tailspindatabase'
@@ -213,7 +213,7 @@ stages:
           steps:
           - task: AzureKeyVault@1 # task qui recupere les secrets de vault et les ajoute aux variables du job.
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               keyVaultName: '$(keyVaultName)'
               secretsFilter: '*'
           - download: current
@@ -222,7 +222,7 @@ stages:
           - task: SqlAzureDacpacDeployment@1
             displayName: 'Deploy SQL schema'
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               authenticationType: 'server'
               serverName: 'tailspin-space-game-sql-dev-$(uniqueSuffix).database.windows.net'
               databaseName: 'tailspindatabase'
@@ -279,7 +279,7 @@ stages:
           steps:
           - task: AzureKeyVault@1 # task qui recupere les secrets de vault et les ajoute aux variables du job.
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               keyVaultName: '$(keyVaultName)'
               secretsFilter: '*'
           - download: current
@@ -287,13 +287,13 @@ stages:
           - task: AzureWebApp@1
             displayName: 'Azure App Service Deploy: website'
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               appName: 'tailspin-space-game-web-dev-$(uniqueSuffix)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
           - task: AzureAppServiceSettings@1
             displayName: Azure App Service Settings
             inputs:
-              azureSubscription: 'Abonnement Azure 1'
+              azureSubscription: 'myConnectionService'
               appName: 'tailspin-space-game-web-dev-$(uniqueSuffix)'
               connectionStrings: |
                 [{ "name": "DefaultConnection","value": "$(connectionString)","type": "SQLAzure","slotSetting": false }]
