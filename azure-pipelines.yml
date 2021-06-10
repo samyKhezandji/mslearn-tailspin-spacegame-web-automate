@@ -107,7 +107,7 @@ stages:
     - task: AzureResourceManagerTemplateDeployment@3  # task pour le deploiement des ressources de la template.
       inputs:
         deploymentScope: 'Resource Group'
-        ConnectedServiceName: 'Abonnement Azure 1'  # AzureSubscription
+        ConnectedServiceName: 'myConnectionService'  # Connection de service vers Azure.
         subscriptionName: '$(subscription)'
         action: 'Create Or Update Resource Group'
         resourceGroupName: 'tailspin-spacegame-web-rg'
@@ -297,4 +297,3 @@ stages:
               appName: 'tailspin-space-game-web-dev-$(uniqueSuffix)'
               connectionStrings: |
                 [{ "name": "DefaultConnection","value": "$(connectionString)","type": "SQLAzure","slotSetting": false }]
-                
